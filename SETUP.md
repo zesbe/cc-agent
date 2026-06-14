@@ -1,8 +1,8 @@
 # Panduan Setup cc-agent (langkah demi langkah)
 
 Tujuan: bisa "menyuruh" provider murah (DeepSeek / GLM / dll) ngoding & edit file
-beneran, dikendalikan harness Claude Code. Panduan ini fokus **DIRECT MODE**
-(tanpa claude-hub) karena paling simpel & lintas-mesin.
+beneran, dikendalikan harness Claude Code — `claude` menembak langsung endpoint
+provider, simpel & lintas-mesin.
 
 ---
 
@@ -127,8 +127,7 @@ echo "<instruksi panjang>" | cc-agent <provider> <workdir>
 | `workdir` | folder yang BOLEH disentuh agent (dikurung di sini) |
 | `task` | instruksi (argumen atau via stdin) |
 
-Override: `CC_AGENT_TIMEOUT` (detik, default 300), `CC_FORCE_HUB=1` (paksa hub),
-`CC_AGENT_CONFIG_DIR` (lokasi file env).
+Override: `CC_AGENT_TIMEOUT` (detik, default 300), `CC_AGENT_CONFIG_DIR` (lokasi file env).
 
 ---
 
@@ -153,28 +152,19 @@ Contoh jadi: [`examples/task-tracker/`](examples/task-tracker/).
 
 ---
 
-## 7. Mode HUB (opsional)
-
-Kalau punya banyak provider / ingin key terpusat, pakai
-[claude-hub](https://github.com/zesbe/claude-hub). cc-agent otomatis pakai hub
-kalau **tidak ada** file `~/.config/cc-agent/<provider>.env`. Paksa hub dengan
-`CC_FORCE_HUB=1`.
-
----
-
-## 8. Troubleshooting
+## 7. Troubleshooting
 
 | Gejala | Sebab & solusi |
 |--------|----------------|
 | `model may not exist or no access` | base_url z.ai pakai `/v1` (hapus), atau nama model salah (cek `/v1/models`) |
-| `no direct config and hub unreachable` | file `<provider>.env` tak ada DAN hub mati. Buat env (langkah 3) atau nyalakan hub |
+| `config not found: ...env` | file `~/.config/cc-agent/<provider>.env` belum dibuat — lihat langkah 3 |
 | agent diam / timeout | naikkan `CC_AGENT_TIMEOUT`, cek `.cc-agent.log` di workdir |
 | hasil ngaco | model murah memang kadang salah — **selalu verifikasi** (re-run test). Pakai model lebih kuat bila perlu |
 | `claude: command not found` | Claude Code belum terpasang / tak di PATH |
 
 ---
 
-## 9. Keamanan (wajib)
+## 8. Keamanan (wajib)
 
 - File `*.env` berisi **API key** → `chmod 600`, simpan di `~/.config/cc-agent/`,
   **JANGAN** commit ke git (sudah di-`.gitignore`).

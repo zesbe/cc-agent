@@ -3,8 +3,6 @@
 .cc-agent.log
 
 # secrets — JANGAN pernah commit
-profiles.db
-profiles.db.*
 *.token
 *.key
 .env
