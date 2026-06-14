@@ -9,6 +9,13 @@ cc-agent deepseek ./my-project "buat module auth, tulis test, jalankan pytest"
 cc-agent zai      ./my-project "refactor utils.py jadi typed, jangan ubah API"
 ```
 
+**Dua mode (auto-deteksi):**
+
+- **DIRECT** — kalau ada `~/.config/cc-agent/<provider>.env`, agent bicara **langsung** ke endpoint Anthropic provider. Tanpa hub, tanpa proses tambahan. Cocok lintas-mesin (termasuk Windows/Mac).
+- **HUB** — kalau tidak, route lewat [claude-hub](https://github.com/zesbe/claude-hub). Berguna kalau punya banyak provider / ingin key terpusat.
+
+> Direct = lebih mandiri (tak butuh hub nyala), bukan signifikan lebih cepat — hop ke localhost-hub <1ms, latency nyata ada di provider.
+
 ---
 
 ## Kenapa ini ada
@@ -57,15 +64,29 @@ Inti: **tool milik harness, bukan model.** claude-hub menerjemahkan `claude-opus
 
 ## Yang dibutuhkan (requirements)
 
-1. **Claude Code CLI** (`claude`) terpasang & ter-login.
-2. **claude-hub** berjalan di `127.0.0.1:8765` — router multi-provider Anthropic-compatible. Lihat https://github.com/zesbe/claude-hub
-3. **Profil provider** terdaftar di claude-hub (`profiles.db`), masing-masing punya:
-   - `base_url` provider (endpoint Anthropic-compatible, mis. `https://api.deepseek.com/anthropic`)
-   - `auth_token` (API key provider) — **disuntik oleh hub, bukan oleh cc-agent**
-   - mapping slot: `opus_model`, `sonnet_model`, `haiku_model`
-4. `bash`, `curl`, dan akses ke direktori kerja.
+**Selalu:** `claude` (Claude Code CLI) terpasang, `bash`, `curl`.
 
-> Provider apa pun yang Anthropic-compatible & mendukung `tool_use` bisa dipakai. Sudah teruji: **DeepSeek** (`deepseek-v4-pro`), **z.ai/GLM** (`glm-5.2`).
+**Mode DIRECT (rekomendasi, tanpa hub):** satu file `~/.config/cc-agent/<provider>.env` (chmod 600) per provider:
+
+```bash
+# ~/.config/cc-agent/deepseek.env
+ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
+ANTHROPIC_AUTH_TOKEN=sk-...
+ANTHROPIC_MODEL=deepseek-v4-pro
+ANTHROPIC_SMALL_FAST_MODEL=deepseek-v4-flash
+```
+
+Contoh lengkap di [`examples/providers/`](examples/providers/).
+
+**Mode HUB:** [claude-hub](https://github.com/zesbe/claude-hub) berjalan di `127.0.0.1:8765` dengan profil provider terdaftar di `profiles.db`.
+
+> Provider apa pun yang Anthropic-compatible & mendukung `tool_use`. Teruji: **DeepSeek** (`deepseek-v4-pro`), **z.ai/GLM** (`glm-5.2`).
+
+### ⚠️ Jebakan yang sering bikin error
+
+- **z.ai base_url JANGAN diakhiri `/v1`.** Claude Code menambah `/v1/messages` sendiri; kalau base sudah `…/anthropic/v1` → jadi `…/v1/v1/messages` → error `model may not exist`. Pakai `https://api.z.ai/api/anthropic`.
+- **Nama model harus persis** seperti yang dikenali provider (cek `GET <base>/v1/models`). z.ai valid: `glm-4.5`, `glm-4.5-air`, `glm-4.6`, `glm-4.7`, `glm-5`, `glm-5.1`, `glm-5.2`.
+- `ANTHROPIC_MODEL` menerima nama non-Claude (mis. `deepseek-v4-pro`, `glm-5.2`) langsung.
 
 ---
 
@@ -87,15 +108,17 @@ echo "<task>" | cc-agent <provider> <workdir>
 
 | Arg | Arti | Default |
 |-----|------|---------|
-| `provider` | nama profil di claude-hub (`deepseek`, `zai`, `minimax`, …) | `deepseek` |
+| `provider` | nama provider (`deepseek`, `zai`, …) — cocok dgn `<provider>.env` atau profil hub | `deepseek` |
 | `workdir`  | direktori yang boleh disentuh agent (dibuat bila belum ada) | `$PWD` |
 | `task`     | instruksi (argumen atau via stdin) | — |
 
 **Env override:**
 - `CC_AGENT_TIMEOUT` — batas detik (default `300`)
 - `CC_HUB_URL` — URL hub (default `http://127.0.0.1:8765`)
+- `CC_FORCE_HUB=1` — abaikan config direct, paksa lewat hub
+- `CC_AGENT_CONFIG_DIR` — lokasi file `.env` (default `~/.config/cc-agent`)
 
-Log tiap run disimpan ke `<workdir>/.cc-agent.log`.
+Log tiap run disimpan ke `<workdir>/.cc-agent.log`. Pemilihan mode: ada `<provider>.env` → DIRECT, selain itu → HUB.
 
 ---
 

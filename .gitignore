@@ -18,3 +18,7 @@ profiles.db.*
 __pycache__/
 *.pyc
 tasks.json
+
+# direct-mode creds (jangan commit yang asli)
+*.env
+!*.env.example

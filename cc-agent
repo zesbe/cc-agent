@@ -1,61 +1,73 @@
 #!/usr/bin/env bash
-# cc-agent — launch a hub-routed Claude Code sub-agent (DeepSeek/GLM/etc brain,
+# cc-agent — launch a file-editing AI sub-agent (DeepSeek/GLM/etc brain,
 # full Claude Code tools). Manager (Opus) calls this via Bash to delegate grunt work.
+#
+# Two modes (auto-detected):
+#   DIRECT : if ~/.config/cc-agent/<provider>.env exists -> talk straight to the
+#            provider's Anthropic endpoint (no hub needed). Cross-machine friendly.
+#   HUB    : else route via claude-hub at $CC_HUB_URL (slot translation, key vault).
 #
 # Usage:
 #   cc-agent <provider> <workdir> "<task>"
 #   echo "<task>" | cc-agent <provider> <workdir>
 #
-#   provider : hub profile name (deepseek | zai | minimax | ...). Default: deepseek
-#   workdir  : directory the agent is confined to (created if missing). Default: $PWD
-#   task     : instruction string (arg) or piped via stdin
+#   provider : deepseek | zai | minimax | ...   (default: deepseek)
+#   workdir  : dir the agent is confined to (created if missing). Default: $PWD
+#   task     : instruction (arg) or piped via stdin
 #
-# Env overrides:
-#   CC_AGENT_TIMEOUT (seconds, default 300)
-#   CC_HUB_URL       (default http://127.0.0.1:8765)
+# Direct-mode config file ~/.config/cc-agent/<provider>.env (chmod 600):
+#   ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic   # NO trailing /v1
+#   ANTHROPIC_AUTH_TOKEN=sk-...
+#   ANTHROPIC_MODEL=deepseek-v4-pro
+#   ANTHROPIC_SMALL_FAST_MODEL=deepseek-v4-flash
+#
+# Env overrides: CC_AGENT_TIMEOUT (default 300), CC_HUB_URL (default 127.0.0.1:8765),
+#                CC_FORCE_HUB=1 (ignore direct config and use hub)
 set -euo pipefail
 
 HUB="${CC_HUB_URL:-http://127.0.0.1:8765}"
 TIMEOUT="${CC_AGENT_TIMEOUT:-300}"
+CFG_DIR="${CC_AGENT_CONFIG_DIR:-$HOME/.config/cc-agent}"
 
 provider="${1:-deepseek}"
 workdir="${2:-$PWD}"
 shift $(( $# >= 2 ? 2 : $# )) || true
 task="${*:-}"
 [ -z "$task" ] && task="$(cat)"   # fall back to stdin
-
-if [ -z "$task" ]; then
-  echo "cc-agent: ERROR no task given" >&2; exit 2
-fi
-
-# 1) hub alive?
-if ! curl -s -m 3 "$HUB/api/health" >/dev/null 2>&1; then
-  echo "cc-agent: ERROR claude-hub not reachable at $HUB" >&2; exit 3
-fi
-
-# 2) provider exists?
-if ! curl -s -m 5 "$HUB/p/$provider/v1/messages" \
-      -H 'content-type: application/json' -H 'authorization: Bearer dummy' \
-      -H 'anthropic-version: 2023-06-01' \
-      -d '{"model":"claude-haiku-4-5","max_tokens":1,"messages":[{"role":"user","content":"x"}]}' \
-      2>/dev/null | grep -q '"model"'; then
-  echo "cc-agent: WARN provider '$provider' ping tidak balas normal — lanjut tetap dicoba" >&2
-fi
+[ -z "$task" ] && { echo "cc-agent: ERROR no task given" >&2; exit 2; }
 
 mkdir -p "$workdir"
 log="$workdir/.cc-agent.log"
+cfg="$CFG_DIR/$provider.env"
 
-echo "cc-agent: provider=$provider workdir=$workdir timeout=${TIMEOUT}s" >&2
-ANTHROPIC_BASE_URL="$HUB/p/$provider/" \
-ANTHROPIC_AUTH_TOKEN="dummy" \
-timeout "$TIMEOUT" claude --permission-mode bypassPermissions \
-  --add-dir "$workdir" -p "Kamu bekerja di direktori $workdir. $task" \
-  > "$log" 2>&1
-rc=$?
+run_claude() {  # $1=mode-label
+  echo "cc-agent: mode=$1 provider=$provider workdir=$workdir timeout=${TIMEOUT}s" >&2
+  timeout "$TIMEOUT" claude --permission-mode bypassPermissions \
+    --add-dir "$workdir" -p "Kamu bekerja di direktori $workdir. $task" \
+    < /dev/null > "$log" 2>&1
+}
+
+if [ -z "${CC_FORCE_HUB:-}" ] && [ -f "$cfg" ]; then
+  # ── DIRECT MODE ──────────────────────────────────────────────────────────
+  set -a; . "$cfg"; set +a
+  : "${ANTHROPIC_BASE_URL:?cc-agent: $cfg missing ANTHROPIC_BASE_URL}"
+  : "${ANTHROPIC_AUTH_TOKEN:?cc-agent: $cfg missing ANTHROPIC_AUTH_TOKEN}"
+  : "${ANTHROPIC_MODEL:?cc-agent: $cfg missing ANTHROPIC_MODEL}"
+  export ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_MODEL
+  [ -n "${ANTHROPIC_SMALL_FAST_MODEL:-}" ] && export ANTHROPIC_SMALL_FAST_MODEL
+  run_claude "DIRECT($ANTHROPIC_MODEL)"; rc=$?
+else
+  # ── HUB MODE ─────────────────────────────────────────────────────────────
+  if ! curl -s -m 3 "$HUB/api/health" >/dev/null 2>&1; then
+    echo "cc-agent: ERROR no direct config ($cfg) and hub unreachable at $HUB" >&2
+    exit 3
+  fi
+  export ANTHROPIC_BASE_URL="$HUB/p/$provider/"
+  export ANTHROPIC_AUTH_TOKEN="dummy"
+  run_claude "HUB"; rc=$?
+fi
 
 cat "$log"
 echo >&2
-if [ $rc -ne 0 ]; then
-  echo "cc-agent: exit $rc (timeout/err) — cek $log" >&2
-fi
+[ $rc -ne 0 ] && echo "cc-agent: exit $rc (timeout/err) — cek $log" >&2
 exit $rc
