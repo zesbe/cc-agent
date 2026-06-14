@@ -97,6 +97,9 @@ git clone https://github.com/zesbe/cc-agent.git
 install -m 755 cc-agent/cc-agent ~/.local/bin/cc-agent   # pastikan ~/.local/bin di PATH
 ```
 
+> 📘 **Baru pertama kali? Ikuti [SETUP.md](SETUP.md)** — panduan langkah demi langkah
+> (pasang, bikin file env per provider, jebakan umum, troubleshooting).
+
 ---
 
 ## Pemakaian
