@@ -1,0 +1,20 @@
+# logs
+*.log
+.cc-agent.log
+
+# secrets — JANGAN pernah commit
+profiles.db
+profiles.db.*
+*.token
+*.key
+.env
+.env.*
+
+# backups
+*.bak
+*.bak.*
+
+# python
+__pycache__/
+*.pyc
+tasks.json

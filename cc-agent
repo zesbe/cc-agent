@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# cc-agent — launch a hub-routed Claude Code sub-agent (DeepSeek/GLM/etc brain,
+# full Claude Code tools). Manager (Opus) calls this via Bash to delegate grunt work.
+#
+# Usage:
+#   cc-agent <provider> <workdir> "<task>"
+#   echo "<task>" | cc-agent <provider> <workdir>
+#
+#   provider : hub profile name (deepseek | zai | minimax | ...). Default: deepseek
+#   workdir  : directory the agent is confined to (created if missing). Default: $PWD
+#   task     : instruction string (arg) or piped via stdin
+#
+# Env overrides:
+#   CC_AGENT_TIMEOUT (seconds, default 300)
+#   CC_HUB_URL       (default http://127.0.0.1:8765)
+set -euo pipefail
+
+HUB="${CC_HUB_URL:-http://127.0.0.1:8765}"
+TIMEOUT="${CC_AGENT_TIMEOUT:-300}"
+
+provider="${1:-deepseek}"
+workdir="${2:-$PWD}"
+shift $(( $# >= 2 ? 2 : $# )) || true
+task="${*:-}"
+[ -z "$task" ] && task="$(cat)"   # fall back to stdin
+
+if [ -z "$task" ]; then
+  echo "cc-agent: ERROR no task given" >&2; exit 2
+fi
+
+# 1) hub alive?
+if ! curl -s -m 3 "$HUB/api/health" >/dev/null 2>&1; then
+  echo "cc-agent: ERROR claude-hub not reachable at $HUB" >&2; exit 3
+fi
+
+# 2) provider exists?
+if ! curl -s -m 5 "$HUB/p/$provider/v1/messages" \
+      -H 'content-type: application/json' -H 'authorization: Bearer dummy' \
+      -H 'anthropic-version: 2023-06-01' \
+      -d '{"model":"claude-haiku-4-5","max_tokens":1,"messages":[{"role":"user","content":"x"}]}' \
+      2>/dev/null | grep -q '"model"'; then
+  echo "cc-agent: WARN provider '$provider' ping tidak balas normal — lanjut tetap dicoba" >&2
+fi
+
+mkdir -p "$workdir"
+log="$workdir/.cc-agent.log"
+
+echo "cc-agent: provider=$provider workdir=$workdir timeout=${TIMEOUT}s" >&2
+ANTHROPIC_BASE_URL="$HUB/p/$provider/" \
+ANTHROPIC_AUTH_TOKEN="dummy" \
+timeout "$TIMEOUT" claude --permission-mode bypassPermissions \
+  --add-dir "$workdir" -p "Kamu bekerja di direktori $workdir. $task" \
+  > "$log" 2>&1
+rc=$?
+
+cat "$log"
+echo >&2
+if [ $rc -ne 0 ]; then
+  echo "cc-agent: exit $rc (timeout/err) — cek $log" >&2
+fi
+exit $rc
