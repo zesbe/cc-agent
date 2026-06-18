@@ -57,7 +57,18 @@ timeout "$TIMEOUT" claude --permission-mode bypassPermissions \
   < /dev/null > "$log" 2>&1
 rc=$?
 
-cat "$log"
+# Hemat token manager: default cuma tampilkan ringkasan (ekor) — laporan agent
+# ada di ujung. Full transcript tetap di $log. Set CC_AGENT_FULL=1 untuk dump penuh.
+if [ -n "${CC_AGENT_FULL:-}" ]; then
+  cat "$log"
+else
+  lines="${CC_AGENT_TAIL:-20}"
+  total=$(wc -l < "$log")
+  if [ "$total" -gt "$lines" ]; then
+    echo "[... $((total - lines)) baris awal disembunyikan, full: $log ...]"
+  fi
+  tail -n "$lines" "$log"
+fi
 echo >&2
 [ $rc -ne 0 ] && echo "cc-agent: exit $rc (timeout/err) — cek $log" >&2
 exit $rc

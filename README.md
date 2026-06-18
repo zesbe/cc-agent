@@ -104,10 +104,12 @@ echo "<task>" | cc-agent <provider> <workdir>
 | `task`     | instruksi (argumen atau via stdin) | — |
 
 **Env override:**
-- `CC_AGENT_TIMEOUT` — batas detik (default `300`)
+- `CC_AGENT_TIMEOUT` — batas detik (default `300`). **Tugas output panjang (file besar / redesign UI): set `900`+** — kalau kekecilan, agent kepotong di tengah dan terlihat "gagal" padahal mampu.
 - `CC_AGENT_CONFIG_DIR` — lokasi file `.env` (default `~/.config/cc-agent`)
+- `CC_AGENT_TAIL` — jumlah baris ringkasan yang dicetak ke stdout (default `20`). Hemat token pemanggil.
+- `CC_AGENT_FULL=1` — cetak transkrip penuh, bukan ringkasan.
 
-Log tiap run disimpan ke `<workdir>/.cc-agent.log`.
+Default hemat: hanya ekor log (laporan akhir agent) yang dicetak ke stdout; transkrip penuh selalu tersimpan di `<workdir>/.cc-agent.log`.
 
 ---
 

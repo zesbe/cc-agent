@@ -127,7 +127,7 @@ echo "<instruksi panjang>" | cc-agent <provider> <workdir>
 | `workdir` | folder yang BOLEH disentuh agent (dikurung di sini) |
 | `task` | instruksi (argumen atau via stdin) |
 
-Override: `CC_AGENT_TIMEOUT` (detik, default 300), `CC_AGENT_CONFIG_DIR` (lokasi file env).
+Override: `CC_AGENT_TIMEOUT` (detik, default 300; tugas besar set 900+), `CC_AGENT_CONFIG_DIR` (lokasi file env), `CC_AGENT_TAIL` (baris ringkasan, default 20), `CC_AGENT_FULL=1` (transkrip penuh).
 
 ---
 
