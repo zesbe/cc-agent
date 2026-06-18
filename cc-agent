@@ -70,5 +70,11 @@ else
   tail -n "$lines" "$log"
 fi
 echo >&2
+# Deteksi error saldo/quota → sinyal khusus (exit 7) biar manager langsung cascade
+# ke provider lain, bukan dikira bug kode.
+if grep -qiE "insufficient balance|insufficient.*credit|exceeded your.*quota|quota exceeded|payment required|402|account balance|saldo|arrears" "$log" 2>/dev/null; then
+  echo "cc-agent: ⚠️ SALDO/CREDIT provider '$provider' kemungkinan HABIS (billing error) — cascade ke provider lain." >&2
+  exit 7
+fi
 [ $rc -ne 0 ] && echo "cc-agent: exit $rc (timeout/err) — cek $log" >&2
 exit $rc
